@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>vlesstorage import</title>
+    <link rel="icon" type="image/png" href="favicon.png">
+    <link rel="apple-touch-icon" href="favicon.png">
+    <meta property="og:image" content="favicon.png">
+    <style>
+        :root {
+            --bg-color: #fafafa;
+            --container-bg: #ffffff;
+            --text-color: #333333;
+            --sub-text-color: #666666;
+            --accent-color: #0088cc;
+            --shadow: rgba(0,0,0,0.05);
+        }
+
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --bg-color: #121212;
+                --container-bg: #1e1e1e;
+                --text-color: #e0e0e0;
+                --sub-text-color: #aaaaaa;
+                --accent-color: #39a2db;
+                --shadow: rgba(0,0,0,0.3);
+            }
+        }
+
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
+            display: flex; justify-content: center; align-items: center; 
+            height: 100vh; margin: 0; background: var(--bg-color); 
+            color: var(--text-color); transition: all 0.3s ease;
+        }
+
+        .container { 
+            text-align: center; padding: 30px; border-radius: 16px; 
+            background: var(--container-bg); box-shadow: 0 8px 30px var(--shadow);
+            max-width: 90%; width: 350px;
+        }
+
+        .loader-gif { 
+            width: 100px; height: 100px; margin: 0 auto 20px; 
+            display: block; object-fit: contain;
+        }
+
+        .gif-wrapper {
+            position: relative; width: 100px; height: 100px; margin: 0 auto 15px;
+            display: none; cursor: pointer; user-select: none;
+            -webkit-tap-highlight-color: transparent; transition: transform 0.1s ease;
+        }
+
+        .gif-wrapper.active { transform: scale(0.9); }
+
+        .error-gif { 
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            object-fit: contain; transition: opacity 0.7s ease-in-out;
+        }
+
+        .visible { opacity: 1; z-index: 2; }
+        .hidden { opacity: 0; z-index: 1; }
+
+        h2 { margin: 10px 0; font-size: 1.25rem; }
+        p { color: var(--sub-text-color); font-size: 0.95rem; line-height: 1.5; margin-bottom: 20px; }
+        a { color: var(--accent-color); text-decoration: none; font-weight: bold; }
+        #hidden-iframe { display: none; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <img id="status-icon" class="loader-gif" src="3.gif" alt="Loading...">
+        
+        <div id="gif-container" class="gif-wrapper">
+            <img id="img-monocle" class="error-gif visible" src="1.gif" alt="Monocle">
+            <img id="img-question" class="error-gif hidden" src="2.gif" alt="Question">
+        </div>
+        
+        <h2 id="status-text">Импорт конфигурации...</h2>
+        <p id="sub-text">Открываем приложение. Если ничего не произошло, <a id="manual-link" href="#">нажмите сюда</a>.</p>
+    </div>
+
+    <iframe id="hidden-iframe"></iframe>
+
+    <script>
+        const TELEGRAM_LINK = "https://t.me/vlesstorage";
+        
+        // 1. Извлекаем "сырую" строку из браузера
+        const rawHref = window.location.href;
+        let configUrl = null;
+
+        if (rawHref.includes('url=')) {
+            const parts = rawHref.split('url=');
+            configUrl = parts.slice(1).join('url=');
+
+            // 2. ФИКС РУССКОГО ТЕКСТА
+            // Если браузер УЖЕ превратил %D0... в русский текст, нам нужно
+            // закодировать его обратно, иначе приложение выдаст ошибку.
+            // Мы кодируем всё, кроме базовых символов протокола.
+            try {
+                // Сначала декодируем полностью (на случай если там смесь), 
+                // а потом кодируем только кириллицу и спецсимволы
+                const decoded = decodeURIComponent(configUrl);
+                configUrl = encodeURI(decoded); 
+            } catch(e) {
+                // Если возникла ошибка декодирования, оставляем как есть
+            }
+        }
+
+        const statusIcon = document.getElementById('status-icon');
+        const gifContainer = document.getElementById('gif-container');
+        const imgMonocle = document.getElementById('img-monocle');
+        const imgQuestion = document.getElementById('img-question');
+        const statusText = document.getElementById('status-text');
+        const subText = document.getElementById('sub-text');
+        const manualLink = document.getElementById('manual-link');
+        const hiddenIframe = document.getElementById('hidden-iframe');
+
+        if (configUrl) {
+            manualLink.href = configUrl;
+
+            // ЦЕПОЧКА ПОПЫТОК
+            window.location.href = configUrl;
+
+            setTimeout(() => {
+                hiddenIframe.src = configUrl;
+            }, 300);
+
+            setTimeout(() => {
+                const link = document.createElement('a');
+                link.href = configUrl;
+                link.target = '_self';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            }, 600);
+
+            setTimeout(() => {
+                window.location.replace(configUrl);
+            }, 1200);
+
+        } else {
+            statusIcon.style.display = 'none';
+            gifContainer.style.display = 'block';
+            statusText.innerText = "Ошибка конфигурации";
+            subText.innerHTML = `Ссылка не найдена, но самые топовые конфиги ждут тебя в канале <br><br><a href="${TELEGRAM_LINK}">@vlesstorage</a>`;
+        }
+
+        let cooldown = false;
+        gifContainer.addEventListener('click', () => {
+            gifContainer.classList.add('active');
+            setTimeout(() => gifContainer.classList.remove('active'), 100);
+            if (cooldown) return;
+            cooldown = true;
+            imgMonocle.classList.replace('visible', 'hidden');
+            imgQuestion.classList.replace('hidden', 'visible');
+            setTimeout(() => {
+                imgQuestion.classList.replace('visible', 'hidden');
+                imgMonocle.classList.replace('hidden', 'visible');
+                cooldown = false;
+            }, 2000);
+        });
+    </script>
+</body>
+</html>
